@@ -157,7 +157,17 @@ QLabel#value {
 }
 QLabel#coreName {
     color: #9aabad;
-    font-size: 8pt;
+    font-size: 9pt;
+}
+QLabel#networkRate {
+    color: #f2f8f7;
+    font-family: "Consolas";
+    font-size: 26pt;
+    font-weight: 700;
+}
+QLabel#networkUnit {
+    color: #9aabad;
+    font-size: 10pt;
 }
 QLabel#networkDownload {
     color: #49e2c1;
@@ -182,7 +192,32 @@ QScrollArea {
 QScrollArea > QWidget > QWidget {
     background: transparent;
 }
+QScrollBar:vertical {
+    background: #20282c;
+    width: 8px;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background: #526164;
+    border-radius: 3px;
+    min-height: 28px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #718084;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    border: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
 """
+
+STORAGE_WARNING_COLOR = "#e4b76d"
+STORAGE_CRITICAL_COLOR = "#ec7a7a"
+STORAGE_WARNING_FREE = 20 * 1024 ** 3
+STORAGE_CRITICAL_FREE = 5 * 1024 ** 3
 
 
 class ProbeSignals(QObject):
@@ -195,9 +230,16 @@ class MeterBar(QProgressBar):
     def __init__(self, height=6, parent=None):
         super().__init__(parent)
         self._track_height = height
+        self._fill_color = QColor("#49e2c1")
         self.setRange(0, 100)
         self.setTextVisible(False)
         self.setFixedHeight(height + 4)
+
+    def set_fill_color(self, color):
+        new_color = QColor(color)
+        if new_color != self._fill_color:
+            self._fill_color = new_color
+            self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -208,11 +250,11 @@ class MeterBar(QProgressBar):
         ratio = (self.value() - self.minimum()) / float(span)
         filled_width = int(track_width * max(0.0, min(1.0, ratio)))
         if filled_width:
-            painter.fillRect(0, track_y, filled_width, self._track_height, QColor("#49e2c1"))
+            painter.fillRect(0, track_y, filled_width, self._track_height, self._fill_color)
         for tick in (0.25, 0.5, 0.75):
             x = int(track_width * tick)
-            tick_color = "#17433b" if x < filled_width else "#526164"
-            painter.fillRect(x, track_y, 1, self._track_height, QColor(tick_color))
+            tick_color = self._fill_color.darker(300) if x < filled_width else QColor("#526164")
+            painter.fillRect(x, track_y, 1, self._track_height, tick_color)
         painter.end()
 
 
@@ -479,6 +521,22 @@ class Dashboard(QWidget):
         painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
         painter.end()
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "core_grid"):
+            self._layout_core_rows()
+
+    def _layout_core_rows(self):
+        columns = 3 if self.width() < 980 else 4
+        if columns == self._core_columns:
+            return
+        if self._core_columns is not None:
+            for widget in self.core_rows:
+                self.core_grid.removeWidget(widget)
+        for index, widget in enumerate(self.core_rows):
+            self.core_grid.addWidget(widget, index // columns, index % columns)
+        self._core_columns = columns
+
     @staticmethod
     def _label(text="", object_name=None):
         label = QLabel(text)
@@ -587,15 +645,18 @@ class Dashboard(QWidget):
 
         self.cpu_bars = []
         self.cpu_cores = psutil.cpu_count(logical=True) or 1
-        core_grid = QGridLayout()
-        core_grid.setHorizontalSpacing(22)
-        core_grid.setVerticalSpacing(12)
+        self.core_rows = []
+        self.core_grid = QGridLayout()
+        self.core_grid.setHorizontalSpacing(22)
+        self.core_grid.setVerticalSpacing(12)
+        self._core_columns = None
         for index in range(self.cpu_cores):
-            row, column = divmod(index, 4)
-            item = QHBoxLayout()
+            row_widget = QWidget()
+            item = QHBoxLayout(row_widget)
+            item.setContentsMargins(0, 0, 0, 0)
             name = QLabel(f"CORE {index + 1:02}")
             name.setObjectName("coreName")
-            name.setFixedWidth(46)
+            name.setFixedWidth(50)
             bar = MeterBar(height=4)
             bar.setObjectName("coreBar")
             bar.setRange(0, 100)
@@ -604,13 +665,14 @@ class Dashboard(QWidget):
             percent = QLabel("—")
             percent.setObjectName("coreName")
             percent.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            percent.setFixedWidth(30)
+            percent.setFixedWidth(34)
             item.addWidget(name)
             item.addWidget(bar, 1)
             item.addWidget(percent)
-            core_grid.addLayout(item, row, column)
+            self.core_rows.append(row_widget)
             self.cpu_bars.append({"bar": bar, "percent": percent})
-        cpu_layout.addLayout(core_grid)
+        self._layout_core_rows()
+        cpu_layout.addLayout(self.core_grid)
         cpu_layout.addWidget(self._label("Per-core activity", "muted"))
         grid.addWidget(cpu_panel, 0, 0, 1, 2)
 
@@ -641,7 +703,7 @@ class Dashboard(QWidget):
         self.disk_status.setWordWrap(True)
         self.disk_rows_layout.addWidget(self.disk_status)
         storage_layout.addLayout(self.disk_rows_layout)
-        grid.addWidget(storage_panel, 1, 1)
+        grid.addWidget(storage_panel, 2, 0)
 
         system_panel, system_layout = self._panel("This device")
         self.system_os = self._label("—", "value")
@@ -655,7 +717,7 @@ class Dashboard(QWidget):
         system_layout.addSpacing(4)
         system_layout.addWidget(self.system_uptime)
         system_layout.addWidget(self.system_boot)
-        grid.addWidget(system_panel, 2, 0)
+        grid.addWidget(system_panel, 2, 1)
 
         gpu_panel, gpu_layout = self._panel("Graphics")
         self.gpu_name = self._label("Checking NVIDIA telemetry…", "value")
@@ -680,7 +742,7 @@ class Dashboard(QWidget):
         gpu_layout.addWidget(self.gpu_bar)
         gpu_layout.addWidget(self.gpu_memory)
         gpu_layout.addWidget(self.gpu_note)
-        grid.addWidget(gpu_panel, 2, 1)
+        grid.addWidget(gpu_panel, 1, 1)
 
         return page
 
@@ -693,16 +755,26 @@ class Dashboard(QWidget):
         speed_panel, speed_layout = self._panel("Live throughput")
         rate_row = QHBoxLayout()
         rate_row.setSpacing(34)
-        self.download_value = self._label("Sampling…", "metricLarge")
-        self.upload_value = self._label("Sampling…", "metricLarge")
+        self.download_value = self._label("Sampling…", "networkRate")
+        self.upload_value = self._label("Sampling…", "networkRate")
         download_column = QVBoxLayout()
         download_column.setSpacing(2)
         download_column.addWidget(self._label("DOWNLOAD", "networkDownload"))
-        download_column.addWidget(self.download_value)
+        download_rate = QHBoxLayout()
+        download_rate.setSpacing(6)
+        download_rate.addWidget(self.download_value, 0, Qt.AlignBottom)
+        download_rate.addWidget(self._label("Mbit/s", "networkUnit"), 0, Qt.AlignBottom)
+        download_rate.addStretch()
+        download_column.addLayout(download_rate)
         upload_column = QVBoxLayout()
         upload_column.setSpacing(2)
         upload_column.addWidget(self._label("UPLOAD", "networkUpload"))
-        upload_column.addWidget(self.upload_value)
+        upload_rate = QHBoxLayout()
+        upload_rate.setSpacing(6)
+        upload_rate.addWidget(self.upload_value, 0, Qt.AlignBottom)
+        upload_rate.addWidget(self._label("Mbit/s", "networkUnit"), 0, Qt.AlignBottom)
+        upload_rate.addStretch()
+        upload_column.addLayout(upload_rate)
         rate_row.addLayout(download_column, 1)
         rate_row.addLayout(upload_column, 1)
         speed_layout.addLayout(rate_row)
@@ -751,7 +823,7 @@ class Dashboard(QWidget):
     def _make_scroll_grid():
         content = QWidget()
         grid = QGridLayout(content)
-        grid.setContentsMargins(10, 18, 10, 18)
+        grid.setContentsMargins(10, 18, 10, 12)
         grid.setHorizontalSpacing(28)
         grid.setVerticalSpacing(24)
 
@@ -880,12 +952,16 @@ class Dashboard(QWidget):
 
             if not volume["available"]:
                 row["usage"].setText("Unavailable")
+                row["usage"].setStyleSheet(f"color: {STORAGE_WARNING_COLOR};")
                 row["percent"].setText("—")
+                row["percent"].setStyleSheet("")
                 row["bar"].setValue(0)
                 row["bar"].setEnabled(False)
                 row["free"].setText("Access unavailable")
+                row["free"].setStyleSheet(f"color: {STORAGE_WARNING_COLOR};")
                 continue
 
+            row["usage"].setStyleSheet("")
             row["bar"].setEnabled(True)
             row["bar"].setValue(max(0, min(100, int(volume["percent"]))))
             row["usage"].setText(
@@ -893,7 +969,19 @@ class Dashboard(QWidget):
                 f"{self._format_storage_size(volume['total'])}"
             )
             row["percent"].setText(f"{volume['percent']:.0f}%")
-            row["free"].setText(self._format_storage_size(volume["free"]) + " free")
+            low_space = volume["percent"] >= 85 and volume["free"] < STORAGE_WARNING_FREE
+            critical = low_space and volume["free"] < STORAGE_CRITICAL_FREE
+            if critical:
+                color, status = STORAGE_CRITICAL_COLOR, "Almost full"
+            elif low_space:
+                color, status = STORAGE_WARNING_COLOR, "Low space"
+            else:
+                color, status = "#49e2c1", ""
+            row["bar"].set_fill_color(color)
+            row["percent"].setStyleSheet(f"color: {color};" if status else "")
+            row["free"].setStyleSheet(f"color: {color};" if status else "")
+            free_text = self._format_storage_size(volume["free"]) + " free"
+            row["free"].setText(f"{free_text} · {status}" if status else free_text)
 
     def _start_disk_probe(self):
         if self._disk_probe_pending:

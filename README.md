@@ -1,15 +1,15 @@
 # PC Dashboard
 
-A lightweight Windows desktop dashboard for live CPU, memory, storage, and network monitoring.
+A lightweight Windows desktop dashboard for live CPU, memory, GPU, storage, and network monitoring.
 
-[Download the latest Windows build](https://github.com/Arrantix/PC-Dashboard/releases/latest) · [View all releases](https://github.com/Arrantix/PC-Dashboard/releases)
+[Download PC-Dashboard.exe](https://github.com/Arrantix/PC-Dashboard/releases/latest/download/PC-Dashboard.exe) · [SHA-256 checksum](https://github.com/Arrantix/PC-Dashboard/releases/latest/download/PC-Dashboard.exe.sha256) · [Release details](https://github.com/Arrantix/PC-Dashboard/releases/latest)
 
 ## Features
 
 - CPU utilization, per-core activity, core counts, and current frequency
 - Memory usage and available memory
-- Every mounted disk partition, including used and free space
-- Network throughput, session totals, local address, and latency
+- Every mounted disk partition, including used and free space and low-space warnings
+- Network throughput, transfer totals since the app started, local address, and latency
 - NVIDIA GPU utilization and VRAM when the NVIDIA driver provides `nvidia-smi`
 - Frameless, resizable dark graphite interface with a teal accent
 
@@ -17,16 +17,17 @@ GPU utilization is currently available through NVIDIA driver telemetry only. AMD
 
 ## Download and run
 
-1. Open the [latest release](https://github.com/Arrantix/PC-Dashboard/releases/latest).
-2. Download `PC-Dashboard.exe` and the matching `.sha256` file.
-3. Optionally verify the download in PowerShell:
+1. [Download the latest `PC-Dashboard.exe`](https://github.com/Arrantix/PC-Dashboard/releases/latest/download/PC-Dashboard.exe).
+2. Optionally download the [matching SHA-256 checksum](https://github.com/Arrantix/PC-Dashboard/releases/latest/download/PC-Dashboard.exe.sha256) and compare it in PowerShell:
 
    ```powershell
    Get-FileHash .\PC-Dashboard.exe -Algorithm SHA256
    Get-Content .\PC-Dashboard.exe.sha256
    ```
 
-4. Run `PC-Dashboard.exe`. The standalone build includes the Python runtime and application dependencies; Python does not need to be installed.
+   The two hashes should match.
+
+3. Run `PC-Dashboard.exe`. The standalone build includes the Python runtime and application dependencies; Python does not need to be installed.
 
 The executable is not code-signed, so Windows may show an unknown-publisher notice. Only download it from this repository's Releases page, and compare its SHA-256 value with the published checksum.
 
