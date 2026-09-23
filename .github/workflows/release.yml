@@ -1,0 +1,67 @@
+name: Publish Windows release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Install pinned build dependencies
+        run: python -m pip install -r requirements-build.txt
+
+      - name: Build executable
+        run: python -m PyInstaller --clean --noconfirm PC-Dashboard.spec
+
+      - name: Create SHA-256 checksum
+        run: |
+          $exe = 'dist/PC-Dashboard.exe'
+          if (!(Test-Path $exe)) {
+            throw "PyInstaller did not produce $exe"
+          }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText("$exe.sha256", "$hash  PC-Dashboard.exe`n", [System.Text.UTF8Encoding]::new($false))
+        shell: pwsh
+
+      - name: Create GitHub Release if needed
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --verify-tag --title $tag --generate-notes
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Could not create the GitHub Release.'
+            }
+          }
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload executable and checksum
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $repository = $env:REPOSITORY_SLUG
+          $exe = (Resolve-Path 'dist/PC-Dashboard.exe').Path
+          $checksum = (Resolve-Path 'dist/PC-Dashboard.exe.sha256').Path
+          Get-Item $exe, $checksum | Select-Object Name, Length
+          gh release upload "$tag" "$exe" "$checksum" --clobber --repo "$repository"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub CLI could not upload the release assets.'
+          }
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY_SLUG: ${{ github.repository }}

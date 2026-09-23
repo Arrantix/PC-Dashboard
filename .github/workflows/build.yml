@@ -1,0 +1,36 @@
+name: Windows build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Install pinned build dependencies
+        run: python -m pip install -r requirements-build.txt
+
+      - name: Build executable
+        run: python -m PyInstaller --clean --noconfirm PC-Dashboard.spec
+
+      - name: Confirm executable exists
+        run: |
+          if (!(Test-Path 'dist/PC-Dashboard.exe')) {
+            throw 'PyInstaller did not produce dist/PC-Dashboard.exe'
+          }
+          Get-Item 'dist/PC-Dashboard.exe' | Select-Object Name, Length
+        shell: pwsh
