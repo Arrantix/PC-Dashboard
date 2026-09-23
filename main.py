@@ -84,14 +84,14 @@ QLabel#appSubtitle {
     letter-spacing: 1.2px;
 }
 QLabel#liveBadge {
-    background: #142923;
-    color: #67e7c8;
-    border: 1px solid #28584b;
-    border-radius: 10px;
-    padding: 5px 11px;
+    background: #182321;
+    color: #8bd5c2;
+    border: 1px solid #2d443d;
+    border-radius: 4px;
+    padding: 0 9px;
     font-size: 8pt;
-    font-weight: 700;
-    letter-spacing: 0.8px;
+    font-weight: 600;
+    letter-spacing: 0.7px;
 }
 QTabWidget {
     background: transparent;
@@ -529,6 +529,8 @@ class Dashboard(QWidget):
         layout.addStretch()
         live = QLabel("LIVE  ·  LOCAL")
         live.setObjectName("liveBadge")
+        live.setFixedHeight(23)
+        live.setAlignment(Qt.AlignCenter)
         layout.addWidget(live, 0, Qt.AlignVCenter)
 
         self.min_button = self._make_window_button("minimize", "Minimize")
